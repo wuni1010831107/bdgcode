@@ -1,6 +1,8 @@
 import { ProcessManager } from './process-manager';
 import { ResultFormatter } from './result-formatter';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export interface SparkConfig {
   sparkSqlPath?: string;
@@ -35,7 +37,7 @@ export class SparkExecutor {
 
   async execute(sql: string): Promise<ExecutionResult> {
     const startTime = Date.now();
-    const tmpFile = `/tmp/spark_sql_${Date.now()}.sql`;
+    const tmpFile = path.join(os.tmpdir(), `spark_sql_${Date.now()}_${process.pid}.sql`);
 
     try {
       fs.writeFileSync(tmpFile, sql);

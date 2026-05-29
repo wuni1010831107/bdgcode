@@ -140,47 +140,56 @@ SELECT * FROM ${source} LIMIT 10;`;
     };
   }
 
-  private async executeSparkSQL(params: any): Promise<{ output: string; artifacts?: string[] }> {
-    const sql = this.sanitizeColumns(params.sql || '');
-    if (!sql) return { output: 'No SQL provided for execution.' };
+  private async executeSparkSQL(params: any): Promise<{ output: string; artifacts?: string[]; success: boolean }> {
+    const sql = params.sql || '';
+    if (!sql.trim()) return { output: 'No SQL provided for execution.', success: false };
 
     const executor = this.getSparkExecutor();
     const result = await executor.execute(sql);
 
     if (!result.success) {
-      return { output: `Spark execution failed:\n${result.error}` };
+      return { output: `Spark execution failed:\n${result.error}`, success: false };
     }
 
     return {
       output: `Spark SQL executed successfully (${result.durationMs}ms):\n\n${result.data || 'Query completed (no result set)'}`,
-      artifacts: []
+      artifacts: [],
+      success: true
     };
   }
 
-  private async executeFlinkSQL(params: any): Promise<{ output: string; artifacts?: string[] }> {
+  private async executeFlinkSQL(params: any): Promise<{ output: string; artifacts?: string[]; success: boolean }> {
     const sql = params.sql || '';
+    if (!sql.trim()) return { output: 'No SQL provided for execution.', success: false };
+
     const executor = this.getFlinkExecutor();
     const result = await executor.executeSQL(sql);
 
+    const succeeded = result.status === 'submitted' || result.status === 'running';
+    const footer = succeeded
+      ? `\nUse /flink status ${result.jobId} to monitor.`
+      : '';
     return {
-      output: `Flink job submitted:\nJob ID: ${result.jobId}\nStatus: ${result.status}\n${result.message}\n\nUse /flink status ${result.jobId} to monitor.`
+      output: `Flink job submitted:\nJob ID: ${result.jobId}\nStatus: ${result.status}\n${result.message}${footer}`,
+      success: succeeded
     };
   }
 
-  private async executeClickHouseQuery(params: any): Promise<{ output: string; artifacts?: string[] }> {
-    const sql = this.sanitizeColumns(params.sql || '');
-    if (!sql) return { output: 'No query provided for execution.' };
+  private async executeClickHouseQuery(params: any): Promise<{ output: string; artifacts?: string[]; success: boolean }> {
+    const sql = params.sql || '';
+    if (!sql.trim()) return { output: 'No query provided for execution.', success: false };
 
     const executor = this.getClickHouseExecutor();
     const result = await executor.query(sql);
 
     if (!result.success) {
-      return { output: `ClickHouse query failed:\n${result.error}` };
+      return { output: `ClickHouse query failed:\n${result.error}`, success: false };
     }
 
     return {
       output: `ClickHouse query result (${result.durationMs}ms):\n\n${result.data || 'Query completed'}`,
-      artifacts: []
+      artifacts: [],
+      success: true
     };
   }
 

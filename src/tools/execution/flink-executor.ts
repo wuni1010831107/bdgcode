@@ -1,6 +1,8 @@
 import { ProcessManager } from './process-manager';
 import { ResultFormatter } from './result-formatter';
 import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 export interface FlinkConfig {
   flinkBinPath?: string;
@@ -30,7 +32,7 @@ export class FlinkExecutor {
   }
 
   async executeSQL(sql: string): Promise<FlinkJobResult> {
-    const tmpFile = `/tmp/flink_sql_${Date.now()}.sql`;
+    const tmpFile = path.join(os.tmpdir(), `flink_sql_${Date.now()}_${process.pid}.sql`);
     try {
       fs.writeFileSync(tmpFile, sql);
       return await this.executeSQLFile(tmpFile);

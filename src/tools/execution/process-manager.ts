@@ -5,6 +5,7 @@ export interface ProcessResult {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  error?: string;
 }
 
 export interface ProcessOptions {
@@ -32,19 +33,21 @@ export class ProcessManager {
       let settled = false;
       let timeoutId: NodeJS.Timeout | null = null;
 
-      const finish = (exitCode: number | null, timedOut: boolean = false) => {
+      const finish = (exitCode: number | null, timedOut: boolean = false, error?: Error) => {
         if (settled) return;
         settled = true;
         if (timeoutId) clearTimeout(timeoutId);
         this.processes = this.processes.filter(p => p !== proc);
-        resolve({ exitCode, stdout, stderr, timedOut });
+        const errCode = (error as any)?.code;
+        const errMsg = error ? `${error.message}${errCode ? ` (${errCode})` : ''}` : undefined;
+        resolve({ exitCode, stdout, stderr: errMsg ? `${stderr}\n${errMsg}` : stderr, timedOut, error: errMsg });
       };
 
       proc.stdout.on('data', (data: Buffer) => { stdout += data.toString(); });
       proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
 
       proc.on('close', (code) => finish(code ?? -1));
-      proc.on('error', () => finish(-1));
+      proc.on('error', (err: Error) => finish(-1, false, err));
 
       if (timeoutMs > 0) {
         timeoutId = setTimeout(() => {

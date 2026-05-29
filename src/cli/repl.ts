@@ -199,10 +199,10 @@ export class REPL {
       console.log(chalk.gray('Data collection in progress.'));
       console.log(chalk.gray('Statistics will be more meaningful after 50+ tasks.\n'));
     } else if (trimmed.startsWith('/execute ')) {
-      const args = trimmed.slice(9).trim();
-      const parts = args.split(/\s+/);
-      const engine = parts[0]?.toLowerCase();
-      const sql = parts.slice(1).join(' ');
+      const afterCmd = trimmed.slice(9).trim();
+      const firstSpace = afterCmd.indexOf(' ');
+      const engine = firstSpace > 0 ? afterCmd.slice(0, firstSpace).toLowerCase() : '';
+      const sql = firstSpace > 0 ? afterCmd.slice(firstSpace + 1) : '';
 
       if (!engine || !sql) {
         console.log(chalk.yellow('Usage: /execute <spark|flink|clickhouse> <sql>'));
@@ -224,28 +224,38 @@ export class REPL {
 
       console.log(chalk.blue(`\n⚡ Executing on ${engine}...\n`));
 
-      const { Executor } = await import('../agent/executor');
-      const llm = this.getLLM();
-      const planner = new (await import('../agent/planner')).Planner(llm, this.context.memory);
-      const executor = new Executor(planner, this.context.memory);
+      try {
+        const { Executor } = await import('../agent/executor');
+        const executor = new Executor(undefined as any, this.context.memory);
 
-      const startTime = Date.now();
-      const result = await (executor as any).executeStep({
-        step: 1,
-        action,
-        description: `Direct ${engine} execution`,
-        params: { sql }
-      });
-      const elapsed = Date.now() - startTime;
+        const startTime = Date.now();
+        const result = await (executor as any).executeStep({
+          step: 1,
+          action,
+          description: `Direct ${engine} execution`,
+          params: { sql }
+        });
+        const elapsed = Date.now() - startTime;
 
-      console.log(chalk.cyan(result.output));
-      this.telemetry.recordToolCall({
-        toolName: 'execute',
-        params: { engine, sql: sql.substring(0, 100) },
-        resultStatus: 'success',
-        executionTimeMs: elapsed
-      });
-      this.context.sessionManager.addMessage('assistant', result.output);
+        console.log(chalk.cyan(result.output));
+        this.telemetry.recordToolCall({
+          toolName: 'execute',
+          params: { engine, sql: sql.substring(0, 100) },
+          resultStatus: result.success ? 'success' : 'error',
+          executionTimeMs: elapsed
+        });
+        this.context.sessionManager.addMessage('assistant', result.output);
+      } catch (error) {
+        console.error(chalk.red(`\n❌ Execution failed: ${error instanceof Error ? error.message : String(error)}`));
+        this.telemetry.recordToolCall({
+          toolName: 'execute',
+          params: { engine, sql: sql.substring(0, 100) },
+          resultStatus: 'error',
+          executionTimeMs: 0,
+          errorType: error instanceof Error ? error.name : 'unknown'
+        });
+        this.context.sessionManager.addMessage('assistant', `Execution error: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } else {
       console.log(chalk.blue('\n💭 Thinking...\n'));
 
