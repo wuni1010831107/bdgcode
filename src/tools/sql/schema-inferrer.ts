@@ -14,10 +14,30 @@ export class SchemaInferrer {
     const parts: string[] = [];
     let depth = 0;
     let current = '';
+    let inString = false;
+    let stringChar = '';
 
-    for (const ch of body) {
+    for (let i = 0; i < body.length; i++) {
+      const ch = body[i];
+
+      if (inString) {
+        current += ch;
+        if (ch === stringChar && body[i - 1] !== '\\') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === "'" || ch === '"') {
+        inString = true;
+        stringChar = ch;
+        current += ch;
+        continue;
+      }
+
       if (ch === '(') depth++;
       else if (ch === ')') depth--;
+
       if (ch === ',' && depth === 0) {
         parts.push(current);
         current = '';
@@ -66,15 +86,19 @@ export class SchemaInferrer {
       'DOUBLE': 'DOUBLE', 'FLOAT': 'FLOAT',
       'DECIMAL': 'DECIMAL', 'NUMERIC': 'DECIMAL',
       'BOOLEAN': 'BOOLEAN', 'BOOL': 'BOOLEAN',
-      'TIMESTAMP': 'TIMESTAMP(3)', 'DATETIME': 'TIMESTAMP(3)',
+      'TIMESTAMP': 'TIMESTAMP', 'DATETIME': 'TIMESTAMP',
       'DATE': 'DATE',
       'BINARY': 'BYTES', 'VARBINARY': 'BYTES',
       'ARRAY': 'ARRAY', 'MAP': 'MAP', 'ROW': 'ROW'
     };
     const mapped = map[baseType] || baseType;
-    if (params && (mapped === 'DECIMAL' || mapped === 'TIMESTAMP(3)')) {
-      return mapped.includes('(') ? mapped : `${mapped}(${params})`;
+    if (params && mapped === 'DECIMAL') {
+      return `DECIMAL(${params})`;
     }
+    if (params && mapped === 'TIMESTAMP') {
+      return `TIMESTAMP(${params})`;
+    }
+    if (mapped === 'TIMESTAMP') return 'TIMESTAMP(3)';
     return mapped;
   }
 

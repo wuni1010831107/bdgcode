@@ -41,6 +41,7 @@ export class Executor {
 
     const results: string[] = [];
     const artifacts: string[] = [];
+    let allSucceeded = true;
 
     for (const step of plan.steps) {
       const stepResult = await this.executeStep(step);
@@ -48,10 +49,13 @@ export class Executor {
       if (stepResult.artifacts) {
         artifacts.push(...stepResult.artifacts);
       }
+      if (!stepResult.success) {
+        allSucceeded = false;
+      }
     }
 
     return {
-      success: true,
+      success: allSucceeded,
       output: results.join('\n\n'),
       artifacts
     };
@@ -212,7 +216,8 @@ SELECT * FROM ${source} LIMIT 10;`;
   private securityScan(params: any): { output: string; success: boolean } {
     const tableName = this.escapeIdentifier(params.tableName || params.table_name || 'unknown_table');
 
-    const scanner = new SecurityScanner('');
+    const patternsPath = params.patternsPath || '';
+    const scanner = new SecurityScanner(patternsPath);
     const mockColumns = [
       { name: 'user_id', type: 'STRING' },
       { name: 'phone_number', type: 'STRING' },
@@ -221,14 +226,17 @@ SELECT * FROM ${source} LIMIT 10;`;
     ];
 
     const result = scanner.scanTable(tableName, mockColumns);
+    const hasPatterns = scanner.hasPatterns();
 
     const fieldsList = result.fields.length > 0
       ? result.fields.map(f => `- ${f.name}: ${f.description} (${f.severity})`).join('\n')
-      : '- No sensitive fields detected in mock schema';
+      : hasPatterns
+        ? '- No sensitive fields detected'
+        : '- No security patterns loaded (patternsPath not configured)';
 
     return {
       output: `Security scan for ${tableName}:\n\n${fieldsList}\n\nRecommendations:\n${result.recommendations.map(r => `- ${r}`).join('\n') || '- No actions needed'}\n\nNote: Provide actual table schema for a real scan.`,
-      success: true
+      success: hasPatterns
     };
   }
 
@@ -256,7 +264,8 @@ SELECT * FROM ${source} LIMIT 10;`;
     }
 
     const schema = this.inferSchemaFromParams(params);
-    const artifactPath = path.join(process.cwd(), `${params.target_table || 'realtime_job'}.sql`);
+    const safeTableName = this.escapeIdentifier(params.target_table || 'realtime_job');
+    const artifactPath = path.join(process.cwd(), `${safeTableName}.sql`);
 
     const sql = this.renderTemplate(knowledge, { ...params, ...schema });
     await this.writer.writeFile(artifactPath, sql);
@@ -272,20 +281,20 @@ SELECT * FROM ${source} LIMIT 10;`;
     if (params.columns) {
       return { columns: params.columns, primary_key: params.primary_key || params.key_column || 'id' };
     }
-    if (params.source_table) {
-      const inferred = new SchemaInferrer().inferFromDDL(params.source_table);
-      if (inferred.columns.length > 0) {
-        return {
-          columns: inferred.columns.map(c => `${c.name} ${c.type}`).join(', '),
-          primary_key: inferred.primaryKey
-        };
-      }
-    }
-    return { columns: params.columns || 'id STRING, event_time TIMESTAMP(3)', primary_key: params.primary_key || 'id' };
+    return { columns: 'id STRING, event_time TIMESTAMP(3)', primary_key: params.primary_key || params.key_column || 'id' };
   }
 
   private renderTemplate(template: string, params: Record<string, string>): string {
-    return template.replace(/\{(\w+)\}/g, (_, key) => params[key] || `{${key}}`);
+    const unresolved: string[] = [];
+    const result = template.replace(/\{(\w+)\}/g, (_, key) => {
+      if (params[key]) return params[key];
+      unresolved.push(key);
+      return `{${key}}`;
+    });
+    if (unresolved.length > 0) {
+      console.warn(`Template has unresolved placeholders: ${unresolved.join(', ')}`);
+    }
+    return result;
   }
 
   private getSparkExecutor(): SparkExecutor {

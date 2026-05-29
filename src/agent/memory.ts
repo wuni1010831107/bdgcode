@@ -107,7 +107,6 @@ export class Memory {
   getKnowledgeForTask(taskType: string): string {
     const categoryMap: Record<string, string> = {
       'iceberg-create': 'sql-patterns',
-      'cdc-sync': 'sql-patterns',
       'cdc-mysql-iceberg': 'sql-patterns',
       'cdc-postgres-iceberg': 'sql-patterns',
       'security-scan': 'security',

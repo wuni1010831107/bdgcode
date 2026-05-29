@@ -23,6 +23,10 @@ export class SecurityScanner {
     this.patterns = this.loadPatterns(patternsPath);
   }
 
+  hasPatterns(): boolean {
+    return this.patterns.length > 0;
+  }
+
   scanTable(tableName: string, columns: { name: string; type: string }[]): ScanResult {
     const matchedFields: SensitiveField[] = [];
     const recommendations: string[] = [];
