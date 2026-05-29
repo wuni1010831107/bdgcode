@@ -129,3 +129,25 @@ describe('REPL input validation', () => {
     warnSpy.mockRestore();
   });
 });
+
+describe('REPL /execute command', () => {
+  it('should show /execute in help', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const repl = new REPL({
+      sessionManager: new SessionManager(),
+      memory: new Memory('knowledge', '/tmp/test'),
+      config: {
+        llm: { provider: 'anthropic' as const, apiKey: '', model: 'claude-sonnet-4-6' },
+        telemetry: { enabled: false, storagePath: '' },
+        sources: [],
+        security: { sensitivePatternsPath: '', maskingEnabled: false, auditLogPath: '' },
+        knowledgePath: 'knowledge'
+      }
+    });
+    await (repl as any).showHelp();
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('/execute')
+    );
+    vi.restoreAllMocks();
+  });
+});

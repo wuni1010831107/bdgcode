@@ -3,6 +3,9 @@ import { Planner, Plan, PlanStep } from './planner';
 import { Memory } from './memory';
 import { FileWriter } from '../tools/file/writer';
 import { SecurityScanner } from '../tools/security/scanner';
+import { SparkExecutor } from '../tools/execution/spark-executor';
+import { FlinkExecutor } from '../tools/execution/flink-executor';
+import { ClickHouseExecutor } from '../tools/execution/clickhouse-executor';
 
 export interface ExecutionResult {
   success: boolean;
@@ -15,6 +18,9 @@ export class Executor {
   private planner: Planner;
   private memory: Memory;
   private writer: FileWriter;
+  private sparkExecutor: SparkExecutor | null = null;
+  private flinkExecutor: FlinkExecutor | null = null;
+  private clickHouseExecutor: ClickHouseExecutor | null = null;
 
   constructor(planner: Planner, memory: Memory) {
     this.planner = planner;
@@ -60,6 +66,12 @@ export class Executor {
         return this.generateClickHouseDDL(step.params);
       case 'generate-spark-sql':
         return this.generateSparkSQL(step.params);
+      case 'execute-spark-sql':
+        return this.executeSparkSQL(step.params);
+      case 'execute-flink-sql':
+        return this.executeFlinkSQL(step.params);
+      case 'execute-clickhouse-query':
+        return this.executeClickHouseQuery(step.params);
       default:
         return { output: `Action "${step.action}" not yet implemented in MVP.` };
     }
@@ -128,6 +140,50 @@ SELECT * FROM ${source} LIMIT 10;`;
     };
   }
 
+  private async executeSparkSQL(params: any): Promise<{ output: string; artifacts?: string[] }> {
+    const sql = this.sanitizeColumns(params.sql || '');
+    if (!sql) return { output: 'No SQL provided for execution.' };
+
+    const executor = this.getSparkExecutor();
+    const result = await executor.execute(sql);
+
+    if (!result.success) {
+      return { output: `Spark execution failed:\n${result.error}` };
+    }
+
+    return {
+      output: `Spark SQL executed successfully (${result.durationMs}ms):\n\n${result.data || 'Query completed (no result set)'}`,
+      artifacts: []
+    };
+  }
+
+  private async executeFlinkSQL(params: any): Promise<{ output: string; artifacts?: string[] }> {
+    const sql = params.sql || '';
+    const executor = this.getFlinkExecutor();
+    const result = await executor.executeSQL(sql);
+
+    return {
+      output: `Flink job submitted:\nJob ID: ${result.jobId}\nStatus: ${result.status}\n${result.message}\n\nUse /flink status ${result.jobId} to monitor.`
+    };
+  }
+
+  private async executeClickHouseQuery(params: any): Promise<{ output: string; artifacts?: string[] }> {
+    const sql = this.sanitizeColumns(params.sql || '');
+    if (!sql) return { output: 'No query provided for execution.' };
+
+    const executor = this.getClickHouseExecutor();
+    const result = await executor.query(sql);
+
+    if (!result.success) {
+      return { output: `ClickHouse query failed:\n${result.error}` };
+    }
+
+    return {
+      output: `ClickHouse query result (${result.durationMs}ms):\n\n${result.data || 'Query completed'}`,
+      artifacts: []
+    };
+  }
+
   private securityScan(params: any): { output: string } {
     const tableName = this.escapeIdentifier(params.tableName || params.table_name || 'unknown_table');
 
@@ -165,5 +221,26 @@ SELECT * FROM ${source} LIMIT 10;`;
       if (!trimmed || trimmed.startsWith('--')) return '';
       return `    ${trimmed}`;
     }).filter(Boolean).join(',\n');
+  }
+
+  private getSparkExecutor(): SparkExecutor {
+    if (!this.sparkExecutor) {
+      this.sparkExecutor = new SparkExecutor();
+    }
+    return this.sparkExecutor;
+  }
+
+  private getFlinkExecutor(): FlinkExecutor {
+    if (!this.flinkExecutor) {
+      this.flinkExecutor = new FlinkExecutor();
+    }
+    return this.flinkExecutor;
+  }
+
+  private getClickHouseExecutor(): ClickHouseExecutor {
+    if (!this.clickHouseExecutor) {
+      this.clickHouseExecutor = new ClickHouseExecutor();
+    }
+    return this.clickHouseExecutor;
   }
 }
