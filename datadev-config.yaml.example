@@ -1,0 +1,18 @@
+# DataDev Agent Configuration
+llm:
+  provider: anthropic        # anthropic | openai | local
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-sonnet-4-6
+
+telemetry:
+  enabled: true
+  storage_path: ~/.datadev-agent/telemetry
+
+sources: []  # Add your data sources here
+
+security:
+  sensitive_patterns_path: knowledge/security/sensitive-patterns.json
+  masking_enabled: true
+  audit_log_path: ~/.datadev-agent/audit.log
+
+knowledge_path: knowledge

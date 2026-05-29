@@ -1,0 +1,29 @@
+{
+  "errors": [
+    {
+      "pattern": "OutOfMemoryError",
+      "cause": "Executor 内存不足",
+      "solution": "增加 spark.executor.memory 或 spark.executor.memoryOverhead",
+      "config_fixes": [
+        "--conf spark.executor.memory=8g",
+        "--conf spark.executor.memoryOverhead=4g"
+      ]
+    },
+    {
+      "pattern": "ClassNotFoundException",
+      "cause": "缺少依赖 JAR",
+      "solution": "使用 --jars 或 --packages 添加缺失依赖",
+      "config_fixes": [
+        "--packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.4.0"
+      ]
+    },
+    {
+      "pattern": "AnalysisException.*Table or view not found",
+      "cause": "表不存在或 catalog 未正确配置",
+      "solution": "检查表名、catalog 配置、数据库是否存在",
+      "config_fixes": [
+        "--conf spark.sql.catalog.spark_catalog=org.apache.iceberg.spark.SparkSessionCatalog"
+      ]
+    }
+  ]
+}

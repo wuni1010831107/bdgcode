@@ -1,0 +1,36 @@
+{
+  "patterns": [
+    {
+      "name": "phone_cn",
+      "regex": "(?<!\\d)\\d{11}(?!\\d)",
+      "description": "中国手机号",
+      "category": "PII",
+      "severity": "high",
+      "masking": "138****1234"
+    },
+    {
+      "name": "id_card",
+      "regex": "[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]",
+      "description": "中国身份证号",
+      "category": "PII",
+      "severity": "critical",
+      "masking": "110101****1234"
+    },
+    {
+      "name": "email",
+      "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+      "description": "Email 地址",
+      "category": "PII",
+      "severity": "medium",
+      "masking": "***@***.***"
+    },
+    {
+      "name": "bank_card",
+      "regex": "\\d{16,19}",
+      "description": "银行卡号（16-19位数字）",
+      "category": "PII",
+      "severity": "high",
+      "masking": "**** **** **** 1234"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "clickhouse-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "clickhouse-mcp": "./index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "scripts": {
+    "start": "tsx index.ts"
+  }
+}
