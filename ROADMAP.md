@@ -11,7 +11,7 @@
 
 ---
 
-## 当前版本：v0.1.0（MVP）— 已完成
+## 当前版本：v0.3.0（直接执行能力）— 已完成
 
 ### 已实现能力
 
@@ -34,32 +34,29 @@
 
 ### 已知限制
 
-- 仅代码生成，不直接执行 Spark/Flink 任务
+- 需要本地安装 spark-sql / flink / clickhouse-client CLI 工具
 - 安全扫描依赖预定义正则，LLM 辅助识别尚未启用
 - 知识库检索为简单文本匹配
-- 无 Prompt Caching（token 成本较高）
-- 无 LLM 调用重试机制
+- 无多模态数据管理能力
 
 ---
 
-## v0.2.0 — 增强核心体验（预计 4-6 周）
+## v0.2.0 — 增强核心体验（已完成 ✅）
 
 ### 目标
 
 提升 Agent 的实际可用性和代码生成质量。
 
-### 功能规划
+### 已实现
 
-| 功能 | 优先级 | 说明 |
-|-----|-------|------|
-| **Prompt Caching** | P0 | Anthropic SDK 缓存系统 prompt 和知识库内容，降低 50%+ token 消耗 |
-| **LLM 调用重试** | P0 | 指数退避重试 + 优雅降级 |
-| **Planner 能力对齐** | P0 | 移除 Planner 中 Executor 不支持的动作类型，避免用户困惑 |
-| **SQL 注入防护** | P0 | 对 LLM 生成的 SQL 参数进行转义和校验 |
-| **文件写入集成** | P0 | Executor 使用 FileWriter 真正写入 SQL 文件到项目目录 |
-| **REPL 输入校验** | P1 | 限制单次输入长度，防止 token 溢出 |
-| **错误恢复** | P1 | LLM 调用失败时提供友好提示和重试选项 |
-| **上下文压缩** | P1 | 长对话自动压缩，保持核心上下文在窗口内 |
+| 功能 | 说明 |
+|-----|------|
+| **Prompt Caching** | Anthropic SDK 缓存系统 prompt 和知识库内容 |
+| **LLM 调用重试** | 指数退避重试 + 优雅降级 |
+| **SQL 注入防护** | 标识符转义 + SQL 参数校验 |
+| **文件写入集成** | Executor 使用 FileWriter 写入 SQL 文件 |
+| **REPL 输入校验** | 限制单次输入长度，防止 token 溢出 |
+| **上下文压缩** | 长对话自动压缩，保持核心上下文在窗口内 |
 
 ### 技术债偿还
 
@@ -69,31 +66,33 @@
 
 ---
 
-## v0.3.0 — 直接执行能力（预计 6-8 周）
+## v0.3.0 — 直接执行能力（已完成 ✅）
 
 ### 目标
 
 从"代码生成"升级为"代码生成 + 执行"，真正端到端完成数据任务。
 
-### 功能规划
+### 已实现
 
-| 功能 | 优先级 | 说明 |
-|-----|-------|------|
-| **Spark SQL 执行** | P0 | 通过 `spark-sql` CLI 子进程执行生成的 SQL，返回结果 |
-| **Flink SQL 执行** | P0 | 通过 `flink run` 提交 Flink 作业，监控执行状态 |
-| **ClickHouse 查询** | P0 | 通过 `clickhouse-client` 或 JDBC 执行查询 |
-| **执行结果解析** | P0 | 将 SQL 执行结果格式化为表格输出 |
-| **DDL 执行确认** | P1 | 执行 DDL 前二次确认，防止误操作 |
-| **任务状态监控** | P1 | Flink/Spark 作业提交后持续轮询状态 |
+| 功能 | 说明 |
+|-----|------|
+| **Spark SQL 执行** | 通过 `spark-sql` CLI 子进程执行生成的 SQL，返回结果 |
+| **Flink SQL 执行** | 通过 `flink run` 提交 Flink 作业，监控执行状态 |
+| **ClickHouse 查询** | 通过 `clickhouse-client` CLI 执行查询 |
+| **执行结果解析** | 将 SQL 执行结果格式化为表格输出 |
+| **DDL 执行确认** | 执行 DDL 前二次确认，防止误操作 |
+| **任务状态监控** | Flink/Spark 作业提交后持续轮询状态 |
+| **REPL /execute** | `/execute <engine> <sql>` 直接执行入口 |
 
 ### 新增工具
 
 | 工具 | 说明 |
 |-----|------|
-| `SparkExecutor` | spark-sql 子进程管理 |
+| `ProcessManager` | 统一子进程生命周期管理（spawn, timeout, kill） |
+| `ResultFormatter` | 表格格式化输出，错误信息过滤 |
+| `SparkExecutor` | spark-sql 子进程执行 |
 | `FlinkExecutor` | flink run 作业提交和监控 |
-| `ClickHouseExecutor` | ClickHouse JDBC 查询 |
-| `ProcessManager` | 统一子进程生命周期管理 |
+| `ClickHouseExecutor` | clickhouse-client CLI 查询 |
 
 ---
 
