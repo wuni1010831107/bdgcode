@@ -99,7 +99,16 @@ Available actions:
 - generate-iceberg-ddl: Create Iceberg table DDL
 - generate-spark-sql: Write Spark SQL for data processing
 - generate-clickhouse-ddl: Create ClickHouse table DDL
+- generate-cdc-mysql-iceberg: Generate Flink CDC MySQL → Iceberg job config
+- generate-cdc-postgres-iceberg: Generate Flink CDC PostgreSQL → Iceberg job config
+- generate-kafka-source: Generate Flink Kafka source connector config
+- generate-kafka-sink: Generate Flink Kafka sink connector config
+- generate-realtime-etl: Generate real-time ETL (dedup/window-aggregation/dimension-lookup)
+- generate-consistency-check: Generate data reconciliation SQL for CDC pipelines
 - security-scan: Scan for sensitive data fields
+- execute-spark-sql: Run SQL via spark-sql (DDL requires confirmation)
+- execute-flink-sql: Submit Flink SQL job via flink run
+- execute-clickhouse-query: Run query via clickhouse-client
 
 Lakehouse layering:
 - ODS: Raw data, no transformation
@@ -111,16 +120,31 @@ Lakehouse layering:
 Table naming: {layer}_{domain}_{subject}_{granularity}
 Example: dwd_user_behavior_event_iceberg
 
+CDC parameters for generate-cdc-mysql-iceberg:
+  mysql_host, mysql_port, mysql_user, mysql_password, mysql_database,
+  source_table, iceberg_catalog, warehouse, target_table, primary_key, columns
+
+CDC parameters for generate-cdc-postgres-iceberg:
+  pg_host, pg_port, pg_user, pg_password, pg_database,
+  source_table, iceberg_catalog, warehouse, target_table, primary_key, columns
+
+Real-time ETL parameters for generate-realtime-etl:
+  etl_type (dedup|window-aggregation|dimension-lookup),
+  source_table, target_table, key_column, time_column, warehouse
+
+Consistency check parameters for generate-consistency-check:
+  source_table, target_table, key_column, time_column
+
 Respond ONLY with a JSON object (no other text):
 {
-  "intent": "iceberg-create | cdc-sync | quality-check | security-scan | clickhouse-sync | unknown",
+  "intent": "iceberg-create | cdc-sync | cdc-postgres | kafka-ingest | realtime-etl | consistency-check | security-scan | clickhouse-sync | unknown",
   "confidence": 0.0-1.0,
   "steps": [
     {
       "step": 1,
-      "action": "generate-iceberg-ddl",
-      "description": "Create DWD layer table for user events",
-      "params": { "layer": "dwd", "table_name": "user_behavior", "columns": "user_id STRING, event_time TIMESTAMP(3)", "partition_by": "days(event_time)" }
+      "action": "generate-cdc-mysql-iceberg",
+      "description": "Create Flink CDC MySQL → Iceberg sync job",
+      "params": { "mysql_host": "localhost", "mysql_port": "3306", "mysql_user": "root", "mysql_password": "xxx", "mysql_database": "order_db", "source_table": "orders", "iceberg_catalog": "file:///tmp/warehouse", "warehouse": "file:///tmp/warehouse", "target_table": "dwd_orders", "primary_key": "id", "columns": "id STRING, name STRING, event_time TIMESTAMP(3)" }
     }
   ],
   "requiresConfirmation": true

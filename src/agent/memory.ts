@@ -108,17 +108,25 @@ export class Memory {
     const categoryMap: Record<string, string> = {
       'iceberg-create': 'sql-patterns',
       'cdc-sync': 'sql-patterns',
+      'cdc-mysql-iceberg': 'sql-patterns',
+      'cdc-postgres-iceberg': 'sql-patterns',
       'security-scan': 'security',
-      'clickhouse-sync': 'sql-patterns'
+      'clickhouse-sync': 'sql-patterns',
+      'kafka-source': 'sql-patterns',
+      'kafka-sink': 'sql-patterns',
+      'realtime-dedup': 'sql-patterns',
+      'realtime-window-aggregation': 'sql-patterns',
+      'realtime-dimension-lookup': 'sql-patterns',
+      'data-consistency-check': 'sql-patterns'
     };
 
     const category = categoryMap[taskType];
     if (!category) return '';
 
-    const keyword = taskType.split('-')[0];
-    const items = this.knowledge.loadCategory(category).filter((item: KnowledgeItem) =>
-      path.basename(item.name, path.extname(item.name)).includes(keyword)
-    );
+    const items = this.knowledge.loadCategory(category).filter((item: KnowledgeItem) => {
+      const baseName = path.basename(item.name, path.extname(item.name));
+      return baseName === taskType || baseName.startsWith(taskType + '-');
+    });
     return items.slice(0, 2).map((item: KnowledgeItem) => item.content).join('\n\n');
   }
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-DataDev Agent — a CLI AI assistant for data engineers. Generates Iceberg DDL, Spark SQL, ClickHouse configurations, and performs security scans through natural language conversation. Built with TypeScript, Anthropic SDK, and a REPL-driven architecture.
+DataDev Agent — a CLI AI assistant for data engineers. Generates Iceberg DDL, Spark SQL, ClickHouse configurations, Flink CDC jobs, Kafka connectors, and performs security scans through natural language conversation. Built with TypeScript, Anthropic SDK, and a REPL-driven architecture.
 
 ## Commands
 
@@ -30,7 +30,8 @@ REPL → Planner → Executor → Memory pipeline:
 Supporting modules:
 - `src/config/` — YAML config loading with key normalization (snake_case → camelCase)
 - `src/knowledge/loader.ts` — loads templates from `knowledge/` directory, simple text search
-- `src/tools/sql/generator.ts` — generates Iceberg/ClickHouse DDL and quality check SQL
+- `src/tools/sql/` — SQL generation (DDL, CDC, real-time ETL), schema inference from DDL
+- `src/tools/execution/` — subprocess execution (Spark SQL, Flink, ClickHouse) with ProcessManager and ResultFormatter
 - `src/tools/security/scanner.ts` — regex-based PII detection, generates masking SQL
 - `src/tools/file/` — read/write/scan with path traversal protection (sandboxed to cwd)
 - `src/agent/telemetry.ts` — JSONL-based usage tracking under `~/.datadev-agent/telemetry/`
@@ -39,7 +40,8 @@ Supporting modules:
 ## Key Patterns
 
 - All tool classes are instantiated inline (no DI container). `FileWriter` takes an optional `allowedBase` for path sandboxing.
-- Knowledge templates are plain SQL/MD/JSON files in `knowledge/`. Adding a new template = adding a file.
+- Knowledge templates are plain SQL/MD/JSON files in `knowledge/`. Adding a new template = adding a file. Current templates: Iceberg DDL, ClickHouse DDL, CDC (MySQL/PostgreSQL → Iceberg), Kafka Source/Sink, real-time ETL (dedup, window aggregation, dimension lookup), data consistency check.
+- Execution module (`src/tools/execution/`) uses `child_process.spawn` with `ProcessManager` for unified lifecycle (timeout, kill, output capture). Uses `os.tmpdir()` for cross-platform temp files.
 - MCP client exists (`src/tools/mcp/client.ts`) but is not wired into the REPL/Executor yet.
 - Tests use vitest with `describe/it` blocks. Tests for file operations use `/tmp/` directories. Session/telemetry tests accept a custom directory path to avoid polluting `~/.datadev-agent/`.
 

@@ -96,27 +96,28 @@
 
 ---
 
-## v0.4.0 — 实时数据开发（预计 6-8 周）
+## v0.4.0 — 实时数据开发（已完成 ✅）
 
 ### 目标
 
 覆盖实时数据链路开发场景。
 
-### 功能规划
+### 已实现
 
-| 功能 | 优先级 | 说明 |
-|-----|-------|------|
-| **Flink CDC 配置生成** | P0 | 自动生成 MySQL/PostgreSQL CDC 同步作业 |
-| **Kafka 连接器模板** | P0 | Flink Kafka Source/Sink 配置模板 |
-| **实时 ETL 模板** | P0 | 常用实时转换逻辑（去重、窗口聚合、维表关联） |
-| **CDC Schema 推断** | P1 | 从源表 DDL 自动推断目标表 Schema |
-| **数据一致性检查** | P1 | 实时链路的数据对账 SQL |
+| 功能 | 说明 |
+|-----|------|
+| **Flink CDC 配置生成** | MySQL/PostgreSQL → Iceberg CDC 作业模板 |
+| **Kafka 连接器模板** | Flink Kafka Source/Sink 配置模板 |
+| **实时 ETL 模板** | 去重、窗口聚合、维表关联 |
+| **CDC Schema 推断** | 从源表 DDL 自动推断目标表 Schema |
+| **数据一致性检查** | 实时链路数据对账 SQL |
 
-### 知识库扩展
+### 新增工具
 
-- Flink CDC 最佳实践
-- Kafka 分区策略模板
-- 实时数仓分层规范
+| 工具 | 说明 |
+|-----|------|
+| `SchemaInferrer` | 从 DDL 字符串推断列信息和主键 |
+| CDC/Real-time 模板 | 8 个 Flink SQL 模板（MySQL/PostgreSQL CDC, Kafka, 实时 ETL, 对账） |
 
 ---
 

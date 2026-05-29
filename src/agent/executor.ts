@@ -6,6 +6,7 @@ import { SecurityScanner } from '../tools/security/scanner';
 import { SparkExecutor } from '../tools/execution/spark-executor';
 import { FlinkExecutor } from '../tools/execution/flink-executor';
 import { ClickHouseExecutor } from '../tools/execution/clickhouse-executor';
+import { SchemaInferrer } from '../tools/sql/schema-inferrer';
 
 export interface ExecutionResult {
   success: boolean;
@@ -56,7 +57,7 @@ export class Executor {
     };
   }
 
-  private async executeStep(step: PlanStep): Promise<{ output: string; artifacts?: string[] }> {
+  private async executeStep(step: PlanStep): Promise<{ output: string; artifacts?: string[]; success: boolean }> {
     switch (step.action) {
       case 'generate-iceberg-ddl':
         return this.generateIcebergDDL(step.params);
@@ -72,12 +73,24 @@ export class Executor {
         return this.executeFlinkSQL(step.params);
       case 'execute-clickhouse-query':
         return this.executeClickHouseQuery(step.params);
+      case 'generate-cdc-mysql-iceberg':
+        return this.generateCDCOrRealTime(step.params, 'cdc-mysql-iceberg', 'Generated Flink CDC MySQL → Iceberg job');
+      case 'generate-cdc-postgres-iceberg':
+        return this.generateCDCOrRealTime(step.params, 'cdc-postgres-iceberg', 'Generated Flink CDC PostgreSQL → Iceberg job');
+      case 'generate-kafka-source':
+        return this.generateCDCOrRealTime(step.params, 'kafka-source', 'Generated Flink Kafka source connector');
+      case 'generate-kafka-sink':
+        return this.generateCDCOrRealTime(step.params, 'kafka-sink', 'Generated Flink Kafka sink connector');
+      case 'generate-realtime-etl':
+        return this.generateCDCOrRealTime(step.params, `realtime-${step.params.etl_type || 'dedup'}`, 'Generated real-time ETL job');
+      case 'generate-consistency-check':
+        return this.generateCDCOrRealTime(step.params, 'data-consistency-check', 'Generated data consistency check SQL');
       default:
-        return { output: `Action "${step.action}" not yet implemented in MVP.` };
+        return { output: `Action "${step.action}" not yet implemented in MVP.`, success: false };
     }
   }
 
-  private async generateIcebergDDL(params: any): Promise<{ output: string; artifacts: string[] }> {
+  private async generateIcebergDDL(params: any): Promise<{ output: string; artifacts: string[]; success: boolean }> {
     const layer = this.escapeIdentifier(params.layer || 'dwd');
     const tableName = this.escapeIdentifier(params.table_name || 'unknown');
     const columns = this.sanitizeColumns(params.columns || 'id STRING, event_time TIMESTAMP(3)');
@@ -98,11 +111,12 @@ OPTIONS (
 
     return {
       output: `Generated Iceberg DDL for ${layer}_${tableName}:\n\n${ddl}\n\nSaved to: ${artifactPath}`,
-      artifacts: [artifactPath]
+      artifacts: [artifactPath],
+      success: true
     };
   }
 
-  private async generateClickHouseDDL(params: any): Promise<{ output: string; artifacts: string[] }> {
+  private async generateClickHouseDDL(params: any): Promise<{ output: string; artifacts: string[]; success: boolean }> {
     const tableName = this.escapeIdentifier(params.table_name || 'unknown');
     const columns = this.sanitizeColumns(params.columns || 'id String, event_time DateTime');
 
@@ -117,11 +131,12 @@ SETTINGS index_granularity = 8192;`;
 
     return {
       output: `Generated ClickHouse DDL for ${tableName}:\n\n${ddl}\n\nSaved to: ${artifactPath}`,
-      artifacts: [artifactPath]
+      artifacts: [artifactPath],
+      success: true
     };
   }
 
-  private async generateSparkSQL(params: any): Promise<{ output: string; artifacts: string[] }> {
+  private async generateSparkSQL(params: any): Promise<{ output: string; artifacts: string[]; success: boolean }> {
     const tableName = this.escapeIdentifier(params.table_name || 'query');
     const source = this.escapeIdentifier(params.source || 'source_table');
     const artifactPath = path.join(process.cwd(), `spark_job_${tableName}.sql`);
@@ -136,7 +151,8 @@ SELECT * FROM ${source} LIMIT 10;`;
 
     return {
       output: `Generated Spark SQL:\n\n${sql}\n\nSaved to: ${artifactPath}`,
-      artifacts: [artifactPath]
+      artifacts: [artifactPath],
+      success: true
     };
   }
 
@@ -193,7 +209,7 @@ SELECT * FROM ${source} LIMIT 10;`;
     };
   }
 
-  private securityScan(params: any): { output: string } {
+  private securityScan(params: any): { output: string; success: boolean } {
     const tableName = this.escapeIdentifier(params.tableName || params.table_name || 'unknown_table');
 
     const scanner = new SecurityScanner('');
@@ -211,7 +227,8 @@ SELECT * FROM ${source} LIMIT 10;`;
       : '- No sensitive fields detected in mock schema';
 
     return {
-      output: `Security scan for ${tableName}:\n\n${fieldsList}\n\nRecommendations:\n${result.recommendations.map(r => `- ${r}`).join('\n') || '- No actions needed'}\n\nNote: Provide actual table schema for a real scan.`
+      output: `Security scan for ${tableName}:\n\n${fieldsList}\n\nRecommendations:\n${result.recommendations.map(r => `- ${r}`).join('\n') || '- No actions needed'}\n\nNote: Provide actual table schema for a real scan.`,
+      success: true
     };
   }
 
@@ -230,6 +247,45 @@ SELECT * FROM ${source} LIMIT 10;`;
       if (!trimmed || trimmed.startsWith('--')) return '';
       return `    ${trimmed}`;
     }).filter(Boolean).join(',\n');
+  }
+
+  private async generateCDCOrRealTime(params: any, templateName: string, outputPrefix: string): Promise<{ output: string; artifacts: string[]; success: boolean }> {
+    const knowledge = this.memory.getKnowledgeForTask(templateName);
+    if (!knowledge) {
+      return { output: `Template "${templateName}" not found in knowledge base.`, artifacts: [], success: false };
+    }
+
+    const schema = this.inferSchemaFromParams(params);
+    const artifactPath = path.join(process.cwd(), `${params.target_table || 'realtime_job'}.sql`);
+
+    const sql = this.renderTemplate(knowledge, { ...params, ...schema });
+    await this.writer.writeFile(artifactPath, sql);
+
+    return {
+      output: `${outputPrefix}:\n\n${sql}\n\nSaved to: ${artifactPath}`,
+      artifacts: [artifactPath],
+      success: true
+    };
+  }
+
+  private inferSchemaFromParams(params: any): { columns: string; primary_key: string } {
+    if (params.columns) {
+      return { columns: params.columns, primary_key: params.primary_key || params.key_column || 'id' };
+    }
+    if (params.source_table) {
+      const inferred = new SchemaInferrer().inferFromDDL(params.source_table);
+      if (inferred.columns.length > 0) {
+        return {
+          columns: inferred.columns.map(c => `${c.name} ${c.type}`).join(', '),
+          primary_key: inferred.primaryKey
+        };
+      }
+    }
+    return { columns: params.columns || 'id STRING, event_time TIMESTAMP(3)', primary_key: params.primary_key || 'id' };
+  }
+
+  private renderTemplate(template: string, params: Record<string, string>): string {
+    return template.replace(/\{(\w+)\}/g, (_, key) => params[key] || `{${key}}`);
   }
 
   private getSparkExecutor(): SparkExecutor {
