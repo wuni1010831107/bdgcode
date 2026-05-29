@@ -16,6 +16,9 @@ export interface REPLContext {
   config: ReturnType<typeof loadConfig>;
 }
 
+const MAX_INPUT_LENGTH = 50000;
+const WARN_INPUT_LENGTH = 20000;
+
 export class REPL {
   private context: REPLContext;
   private running: boolean = false;
@@ -25,6 +28,27 @@ export class REPL {
   constructor(context: REPLContext) {
     this.context = context;
     this.telemetry = new TelemetryCollector();
+  }
+
+  validateInputLength(input: string): boolean {
+    if (input.length > MAX_INPUT_LENGTH) {
+      console.error(
+        chalk.red(
+          `❌ Input too long: ${input.length} characters. Maximum allowed is ${MAX_INPUT_LENGTH} characters.`
+        )
+      );
+      return false;
+    }
+
+    if (input.length > WARN_INPUT_LENGTH) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Input is very long (${input.length} characters), consider breaking into smaller requests.`
+        )
+      );
+    }
+
+    return true;
   }
 
   start(): void {
@@ -59,6 +83,12 @@ export class REPL {
 
       if (trimmed === '/help') {
         this.showHelp();
+        rl.prompt();
+        return;
+      }
+
+      // Validate input length before processing
+      if (!this.validateInputLength(trimmed)) {
         rl.prompt();
         return;
       }

@@ -80,3 +80,90 @@ describe('Memory', () => {
     expect(knowledge).toContain('USING iceberg');
   });
 });
+
+describe('Memory context compression', () => {
+  it('should compress messages when exceeding maxContextMessages', () => {
+    const memory = new Memory(knowledgePath, '/tmp/test-project');
+    const messages = Array.from({ length: 25 }, (_, i) => ({
+      role: 'user' as const,
+      content: `message ${i}`,
+      timestamp: new Date()
+    }));
+
+    const compressed = memory.compressMessages(messages);
+
+    // Should have summary + last 10 messages
+    expect(compressed.length).toBeLessThan(25);
+    expect(compressed.length).toBeLessThanOrEqual(11); // 1 summary + 10 messages
+  });
+
+  it('should keep all messages when under limit', () => {
+    const memory = new Memory(knowledgePath, '/tmp/test-project');
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      role: 'user' as const,
+      content: `message ${i}`,
+      timestamp: new Date()
+    }));
+
+    const compressed = memory.compressMessages(messages);
+    expect(compressed.length).toBe(10);
+  });
+
+  it('should create summary message with correct format', () => {
+    const memory = new Memory(knowledgePath, '/tmp/test-project');
+    const messages = Array.from({ length: 25 }, (_, i) => ({
+      role: 'user' as const,
+      content: `message ${i}`,
+      timestamp: new Date()
+    }));
+
+    const compressed = memory.compressMessages(messages);
+    const summaryMsg = compressed.find((m: any) =>
+      typeof m.content === 'string' && m.content.startsWith('Earlier conversation summary:')
+    );
+
+    expect(summaryMsg).toBeDefined();
+    expect(summaryMsg?.role).toBe('system');
+  });
+
+  it('should preserve last 10 messages in full', () => {
+    const memory = new Memory(knowledgePath, '/tmp/test-project');
+    const messages = Array.from({ length: 25 }, (_, i) => ({
+      role: 'user' as const,
+      content: `message ${i}`,
+      timestamp: new Date()
+    }));
+
+    const compressed = memory.compressMessages(messages);
+
+    // Last 10 messages should be preserved
+    const lastTen = messages.slice(-10);
+    const compressedWithoutSummary = compressed.filter((m: any) => m.role !== 'system');
+
+    expect(compressedWithoutSummary.length).toBe(10);
+    expect(compressedWithoutSummary[0].content).toBe(lastTen[0].content);
+    expect(compressedWithoutSummary[9].content).toBe(lastTen[9].content);
+  });
+
+  it('should include assistant messages in compression', () => {
+    const memory = new Memory(knowledgePath, '/tmp/test-project');
+    const messages = [
+      { role: 'user' as const, content: 'hello', timestamp: new Date() },
+      { role: 'assistant' as const, content: 'hi there', timestamp: new Date() },
+      ...Array.from({ length: 23 }, (_, i) => ({
+        role: 'user' as const,
+        content: `message ${i}`,
+        timestamp: new Date()
+      }))
+    ];
+
+    const compressed = memory.compressMessages(messages);
+    const summaryMsg = compressed.find((m: any) =>
+      typeof m.content === 'string' && m.content.startsWith('Earlier conversation summary:')
+    );
+
+    expect(summaryMsg).toBeDefined();
+    expect(summaryMsg?.content).toContain('hello');
+    expect(summaryMsg?.content).toContain('hi there');
+  });
+});

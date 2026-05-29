@@ -5,7 +5,7 @@ import * as os from 'os';
 export interface Session {
   id: string;
   startTime: Date;
-  messages: { role: 'user' | 'assistant'; content: string; timestamp: Date }[];
+  messages: { role: 'user' | 'assistant' | 'system'; content: string; timestamp: Date }[];
   metadata: Record<string, any>;
 }
 

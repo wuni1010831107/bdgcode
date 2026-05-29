@@ -39,6 +39,7 @@ export class Memory {
   private knowledge: KnowledgeLoader;
   private context: ProjectContext;
   private maxContextMessages: number = 20;
+  private messagesToKeepAfterCompression: number = 10;
 
   constructor(knowledgePath: string, projectPath: string) {
     this.knowledge = new KnowledgeLoader(knowledgePath);
@@ -71,6 +72,29 @@ export class Memory {
     if (results.length === 0) return '';
 
     return results.slice(0, 3).map((r: KnowledgeItem) => `## ${r.name}\n${r.content}`).join('\n\n');
+  }
+
+  compressMessages(messages: Session['messages']): Session['messages'] {
+    if (messages.length <= this.maxContextMessages) {
+      return messages;
+    }
+
+    const olderMessages = messages.slice(0, messages.length - this.messagesToKeepAfterCompression);
+    const recentMessages = messages.slice(-this.messagesToKeepAfterCompression);
+
+    // Build summary from older messages
+    const summaryParts = olderMessages.map(m => {
+      const role = m.role === 'user' ? 'User' : 'Assistant';
+      return `${role}: ${m.content}`;
+    });
+
+    const summaryContent = `Earlier conversation summary: ${summaryParts.join(' | ')}`;
+
+    // Return summary as system message + recent messages
+    return [
+      { role: 'system', content: summaryContent, timestamp: new Date() },
+      ...recentMessages
+    ];
   }
 
   trimMessages(messages: Session['messages']): Session['messages'] {
