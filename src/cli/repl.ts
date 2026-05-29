@@ -127,19 +127,29 @@ export class REPL {
 
       const scanner = new SecurityScanner(this.context.config.security.sensitivePatternsPath);
 
-      const mockColumns = [
-        { name: 'user_id', type: 'STRING' },
-        { name: 'phone_number', type: 'STRING' },
-        { name: 'email', type: 'STRING' },
-        { name: 'create_time', type: 'TIMESTAMP' }
-      ];
+      const existingTable = this.context.memory.getContext().existingTables.find(
+        t => t.name === args || t.name.includes(args)
+      );
 
-      const result = scanner.scanTable(args || 'unknown_table', mockColumns);
+      const columns = existingTable
+        ? existingTable.columns.map(c => ({ name: c.name, type: c.type }))
+        : [{ name: 'user_id', type: 'STRING' }, { name: 'phone_number', type: 'STRING' }, { name: 'email', type: 'STRING' }, { name: 'create_time', type: 'TIMESTAMP' }];
+
+      const result = scanner.scanTable(args || 'unknown_table', columns);
+
+      if (existingTable) {
+        console.log(chalk.gray(`Scanning table: ${existingTable.name} (${existingTable.layer} layer)\n`));
+      } else {
+        console.log(chalk.gray(`Table "${args || 'unknown_table'}" not found in project context. Using example columns.\n`));
+      }
 
       console.log(chalk.red(`Risk Level: ${result.riskLevel.toUpperCase()}\n`));
       console.log('Sensitive fields detected:');
       for (const field of result.fields) {
         console.log(chalk.yellow(`  - ${field.name}: ${field.description} (${field.severity})`));
+      }
+      if (result.fields.length === 0) {
+        console.log(chalk.gray('  (none detected)'));
       }
       console.log('');
       console.log('Recommendations:');
@@ -147,7 +157,7 @@ export class REPL {
         console.log(chalk.gray(`  • ${rec}`));
       }
 
-      this.context.sessionManager.addMessage('assistant', `Security scan for ${args || 'unknown_table'}: ${result.fields.length} sensitive fields found.`);
+      this.context.sessionManager.addMessage('assistant', `Security scan for ${args || 'unknown_table'}: ${result.fields.length} sensitive fields found. Risk: ${result.riskLevel}`);
     } else if (trimmed === '/stats') {
       console.log(chalk.blue('\n📊 Agent Statistics\n'));
       const stats = this.telemetry.getStats();

@@ -5,7 +5,7 @@ export class FileWriter {
   private allowedBase: string;
 
   constructor(allowedBase?: string) {
-    this.allowedBase = allowedBase || process.cwd();
+    this.allowedBase = path.resolve(allowedBase || process.cwd());
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
@@ -25,7 +25,8 @@ export class FileWriter {
   }
 
   private assertSafePath(resolved: string): void {
-    if (!resolved.startsWith(this.allowedBase)) {
+    const relative = path.relative(this.allowedBase, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error(`Path traversal blocked: ${resolved} is outside ${this.allowedBase}`);
     }
   }

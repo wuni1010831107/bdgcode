@@ -2,6 +2,7 @@ import * as path from 'path';
 import { Planner, Plan, PlanStep } from './planner';
 import { Memory } from './memory';
 import { FileWriter } from '../tools/file/writer';
+import { SecurityScanner } from '../tools/security/scanner';
 
 export interface ExecutionResult {
   success: boolean;
@@ -67,12 +68,12 @@ export class Executor {
   private async generateIcebergDDL(params: any): Promise<{ output: string; artifacts: string[] }> {
     const layer = this.escapeIdentifier(params.layer || 'dwd');
     const tableName = this.escapeIdentifier(params.table_name || 'unknown');
-    const columns = params.columns || 'id STRING, event_time TIMESTAMP(3)';
+    const columns = this.sanitizeColumns(params.columns || 'id STRING, event_time TIMESTAMP(3)');
     const partitionBy = this.escapeIdentifier(params.partition_by || 'days(event_time)');
 
     const artifactPath = path.join(process.cwd(), `${layer}_${tableName}_iceberg.sql`);
     const ddl = `CREATE TABLE IF NOT EXISTS iceberg.warehouse.${layer}_${tableName} (
-    ${columns}
+${columns}
 )
 USING iceberg
 PARTITIONED BY (${partitionBy})
@@ -91,11 +92,11 @@ OPTIONS (
 
   private async generateClickHouseDDL(params: any): Promise<{ output: string; artifacts: string[] }> {
     const tableName = this.escapeIdentifier(params.table_name || 'unknown');
-    const columns = params.columns || 'id String, event_time DateTime';
+    const columns = this.sanitizeColumns(params.columns || 'id String, event_time DateTime');
 
     const artifactPath = path.join(process.cwd(), `${tableName}_ch.sql`);
     const ddl = `CREATE TABLE IF NOT EXISTS ${tableName} (
-    ${columns}
+${columns}
 ) ENGINE = MergeTree()
 ORDER BY tuple()
 SETTINGS index_granularity = 8192;`;
@@ -128,14 +129,41 @@ SELECT * FROM ${source} LIMIT 10;`;
   }
 
   private securityScan(params: any): { output: string } {
-    const tableName = params.tableName || params.table_name || 'unknown_table';
+    const tableName = this.escapeIdentifier(params.tableName || params.table_name || 'unknown_table');
+
+    const scanner = new SecurityScanner('');
+    const mockColumns = [
+      { name: 'user_id', type: 'STRING' },
+      { name: 'phone_number', type: 'STRING' },
+      { name: 'email', type: 'STRING' },
+      { name: 'create_time', type: 'TIMESTAMP' }
+    ];
+
+    const result = scanner.scanTable(tableName, mockColumns);
+
+    const fieldsList = result.fields.length > 0
+      ? result.fields.map(f => `- ${f.name}: ${f.description} (${f.severity})`).join('\n')
+      : '- No sensitive fields detected in mock schema';
 
     return {
-      output: `Security scan for ${tableName}:\n\n⚠️ 2 sensitive fields detected\n- phone_number (PII, HIGH)\n- email (PII, MEDIUM)\n\nRecommendations:\n- Apply masking rules before sharing\n- Review access controls\n\nNote: Full scan requires table schema input via /security command.`
+      output: `Security scan for ${tableName}:\n\n${fieldsList}\n\nRecommendations:\n${result.recommendations.map(r => `- ${r}`).join('\n') || '- No actions needed'}\n\nNote: Provide actual table schema for a real scan.`
     };
   }
 
   private escapeIdentifier(id: string): string {
     return id.replace(/[^a-zA-Z0-9_]/g, '_');
+  }
+
+  private sanitizeColumns(columns: string): string {
+    const sanitized = columns
+      .replace(/;/g, '')
+      .replace(/--/g, '')
+      .replace(/\/\*/g, '')
+      .replace(/\*\//g, '');
+    return sanitized.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('--')) return '';
+      return `    ${trimmed}`;
+    }).filter(Boolean).join(',\n');
   }
 }

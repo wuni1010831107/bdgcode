@@ -34,16 +34,29 @@ export interface SessionRecord {
   userCorrections: number;
 }
 
+export interface SessionEndRecord {
+  sessionId: string;
+  endTime: string;
+}
+
 export class TelemetryCollector {
   private telemetryDir: string;
   private currentSessionId: string | null = null;
 
   constructor(telemetryDir?: string) {
     this.telemetryDir = telemetryDir || path.join(os.homedir(), '.datadev-agent', 'telemetry');
-    fs.mkdirSync(this.telemetryDir, { recursive: true });
+    try {
+      fs.mkdirSync(this.telemetryDir, { recursive: true });
+    } catch (err) {
+      console.error(`Warning: cannot create telemetry directory ${this.telemetryDir}: ${err}`);
+    }
   }
 
   startSession(): string {
+    if (this.currentSessionId) {
+      return this.currentSessionId;
+    }
+
     this.currentSessionId = `session_${Date.now()}`;
     const record: SessionRecord = {
       sessionId: this.currentSessionId,
@@ -60,28 +73,13 @@ export class TelemetryCollector {
 
   endSession(): void {
     if (!this.currentSessionId) return;
-    this.updateSessionEnd(this.currentSessionId);
+
+    const endRecord: SessionEndRecord = {
+      sessionId: this.currentSessionId,
+      endTime: new Date().toISOString()
+    };
+    this.append('session-ends.jsonl', endRecord);
     this.currentSessionId = null;
-  }
-
-  private updateSessionEnd(sessionId: string): void {
-    const filePath = path.join(this.telemetryDir, 'sessions.jsonl');
-    if (!fs.existsSync(filePath)) return;
-
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
-    const records: SessionRecord[] = [];
-    let found = false;
-
-    for (const line of lines) {
-      const record = JSON.parse(line) as SessionRecord;
-      if (record.sessionId === sessionId && !found) {
-        record.endTime = new Date().toISOString();
-        found = true;
-      }
-      records.push(record);
-    }
-
-    fs.writeFileSync(filePath, records.map(r => JSON.stringify(r)).join('\n') + '\n');
   }
 
   recordToolCall(record: Omit<ToolCallRecord, 'sessionId' | 'callId' | 'timestamp'>): void {
@@ -118,13 +116,21 @@ export class TelemetryCollector {
   }
 
   private append(filename: string, record: any): void {
-    const filePath = path.join(this.telemetryDir, filename);
-    fs.appendFileSync(filePath, JSON.stringify(record) + '\n');
+    try {
+      const filePath = path.join(this.telemetryDir, filename);
+      fs.appendFileSync(filePath, JSON.stringify(record) + '\n');
+    } catch (err) {
+      console.error(`Warning: telemetry write failed: ${err}`);
+    }
   }
 
   private countLines(filename: string): number {
     const filePath = path.join(this.telemetryDir, filename);
     if (!fs.existsSync(filePath)) return 0;
-    return fs.readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim()).length;
+    try {
+      return fs.readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim()).length;
+    } catch {
+      return 0;
+    }
   }
 }

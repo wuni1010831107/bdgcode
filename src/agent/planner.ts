@@ -50,11 +50,9 @@ export class Planner {
 
   private extractJSON(content: string): Plan | null {
     try {
-      const start = content.indexOf('{');
-      const end = content.lastIndexOf('}');
-      if (start === -1 || end === -1 || end <= start) return null;
+      const jsonStr = this.extractJSONObject(content);
+      if (!jsonStr) return null;
 
-      const jsonStr = content.slice(start, end + 1);
       const parsed = JSON.parse(jsonStr);
 
       if (!parsed.intent || !Array.isArray(parsed.steps)) return null;
@@ -73,6 +71,25 @@ export class Planner {
     } catch {
       return null;
     }
+  }
+
+  private extractJSONObject(content: string): string | null {
+    const marker = '"intent"';
+    const markerIdx = content.indexOf(marker);
+    if (markerIdx === -1) return null;
+
+    let braceStart = content.lastIndexOf('{', markerIdx);
+    if (braceStart === -1) return null;
+
+    let depth = 0;
+    for (let i = braceStart; i < content.length; i++) {
+      if (content[i] === '{') depth++;
+      else if (content[i] === '}') depth--;
+      if (depth === 0) {
+        return content.slice(braceStart, i + 1);
+      }
+    }
+    return null;
   }
 
   private buildSystemPrompt(): string {

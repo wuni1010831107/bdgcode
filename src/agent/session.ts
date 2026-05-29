@@ -15,7 +15,11 @@ export class SessionManager {
 
   constructor(sessionsDir?: string) {
     this.sessionsDir = sessionsDir || path.join(os.homedir(), '.datadev-agent', 'sessions');
-    fs.mkdirSync(this.sessionsDir, { recursive: true });
+    try {
+      fs.mkdirSync(this.sessionsDir, { recursive: true });
+    } catch (err) {
+      console.error(`Warning: cannot create sessions directory ${this.sessionsDir}: ${err}`);
+    }
   }
 
   createSession(): Session {
@@ -41,20 +45,31 @@ export class SessionManager {
 
   saveSession(): void {
     if (!this.currentSession) return;
-    const filePath = path.join(this.sessionsDir, `${this.currentSession.id}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(this.currentSession, null, 2));
+    try {
+      const filePath = path.join(this.sessionsDir, `${this.currentSession.id}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(this.currentSession, null, 2));
+    } catch (err) {
+      console.error(`Warning: cannot save session: ${err}`);
+    }
   }
 
   listSessions(): { id: string; startTime: string; messageCount: number }[] {
-    const files = fs.readdirSync(this.sessionsDir).filter(f => f.endsWith('.json'));
-    return files.map(f => {
-      const data = JSON.parse(fs.readFileSync(path.join(this.sessionsDir, f), 'utf-8'));
-      return {
-        id: data.id,
-        startTime: data.startTime,
-        messageCount: data.messages.length
-      };
-    });
+    try {
+      const files = fs.readdirSync(this.sessionsDir).filter(f => f.endsWith('.json'));
+      return files.map(f => {
+        const filePath = path.join(this.sessionsDir, f);
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const data = JSON.parse(raw);
+        return {
+          id: data.id,
+          startTime: data.startTime,
+          messageCount: data.messages?.length ?? 0
+        };
+      });
+    } catch (err) {
+      console.error(`Warning: cannot list sessions: ${err}`);
+      return [];
+    }
   }
 
   private generateId(): string {

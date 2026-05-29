@@ -51,23 +51,29 @@ export class SecurityScanner {
   }
 
   generateMaskingSQL(tableName: string, fields: SensitiveField[]): string {
+    const safeTable = this.escapeIdentifier(tableName);
     const selectParts: string[] = [];
 
     for (const field of fields) {
-      const maskedExpr = this.buildMaskExpression(field.name, field.masking);
-      selectParts.push(`    ${maskedExpr} AS ${field.name}`);
+      const safeField = this.escapeIdentifier(field.name);
+      const maskedExpr = this.buildMaskExpression(safeField, field.masking);
+      selectParts.push(`    ${maskedExpr} AS ${safeField}`);
     }
 
-    return `-- Masked view for ${tableName}\nCREATE VIEW ${tableName}_masked AS\nSELECT\n${selectParts.join(',\n')}\nFROM ${tableName};`;
+    return `-- Masked view for ${safeTable}\nCREATE VIEW ${safeTable}_masked AS\nSELECT\n${selectParts.join(',\n')}\nFROM ${safeTable};`;
   }
 
   private buildMaskExpression(fieldName: string, masking: string): string {
     if (masking.includes('*')) {
       const visibleChars = masking.replace(/\*/g, '').length;
       const maskedLen = masking.length - visibleChars;
-      return `CASE WHEN LENGTH(${fieldName}) > ${maskedLen} THEN CONCAT(SUBSTRING(${fieldName}, 1, ${visibleChars}), REPEAT('*', ${maskedLen})) ELSE '****' END`;
+      return `CASE WHEN LENGTH(${fieldName}) > ${maskedLen} THEN CONCAT(SUBSTRING(${fieldName}, 1, ${visibleChars}), REPEAT('*', ${maskedLen})) ELSE REPEAT('*', ${maskedLen}) END`;
     }
-    return `'${masking}'`;
+    return `'${masking.replace(/'/g, "''")}'`;
+  }
+
+  private escapeIdentifier(id: string): string {
+    return id.replace(/[^a-zA-Z0-9_]/g, '_');
   }
 
   private loadPatterns(path: string): SensitiveField[] {
